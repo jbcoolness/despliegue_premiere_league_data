@@ -21,8 +21,8 @@ variables_1 = bundle['features']
 objetivo_1 = bundle['target_encoder']
 min_max_scaler_1 = bundle['scaler']
 
-# Cargamos el modelo 2
-with open('modelTree_2_v1.pkl', 'rb') as f:
+# Cargamos el modelo 2 (Regresión Logística)
+with open('modelLR_2_v1.pkl', 'rb') as f:
     bundle_2 = pickle.load(f)
 
 model_2 = bundle_2['modelo']
