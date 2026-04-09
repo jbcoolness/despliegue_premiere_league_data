@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 import pickle
 import streamlit as st
 
+# Configuración de la página
+st.set_page_config(
+    page_title="Predictor Premier League",
+    page_icon="⚽",
+    layout="wide"
+)
+
 # Cargamos el modelo 1
 with open('modelTree_v1.pkl', 'rb') as f:
     bundle = pickle.load(f)
@@ -21,19 +28,13 @@ model_2 = bundle_2['modelo']
 variables_2 = bundle_2['features']
 objetivo_2 = bundle_2['target_encoder']
 
+# Cargamos los datos preparados para predicción
+data_preparada = pd.read_csv('data_preparada.csv')
+
 # El data set se entreno con los datos desde la temporada 2020 - 2021 iniciada - 2020-09-12 hasta la temporada 2025 - 2026 (2026-03-16), exactamente en la Jornada 31 
-#  Para un total de 1821 partidos
+# Para un total de 1821 partidos
 
-
-
-st.title('Modelo Para predecir el Resultado de un Partido de Futbol de la Actual Premier League')
-
-Equipo_Local = st.selectbox('Equipo Local', ['Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Burnley', 'Chelsea', 'Crystal Palace', 'Everton', 'Fulham', 'Ipswich', 'Leeds', 'Leicester', 'Liverpool', 'Man City', 'Man United', 'Newcastle', 'Norwich', "Nott'm Forest", 'Sheffield United', 'Southampton', 'Sunderland', 'Tottenham', 'Watford', 'West Brom', 'West Ham', 'Wolves'])
-Equipo_Visitante = st.selectbox('Equipo Visitante', ['Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Burnley', 'Chelsea', 'Crystal Palace', 'Everton', 'Fulham', 'Ipswich', 'Leeds', 'Leicester', 'Liverpool', 'Man City', 'Man United', 'Newcastle', 'Norwich', "Nott'm Forest", 'Sheffield United', 'Southampton', 'Sunderland', 'Tottenham', 'Watford', 'West Brom', 'West Ham', 'Wolves'])
-Year = st.selectbox('Año', [2026])
-Month = st.selectbox('Mes', [3, 4])
-
-vars1 = ['Year', 'Month', 'DayOfWeek','HomeTeam', 'AwayTeam', 'B365H', 'B365D', 'B365A', 'BWH', 'BWD', 'BWA', 'B365>2.5', 'B365<2.5',
+vars1 = ['HomeTeam', 'AwayTeam','Year', 'Month', 'DayOfWeek', 'B365H', 'B365D', 'B365A', 'BWH', 'BWD', 'BWA', 'B365>2.5', 'B365<2.5',
        'AHh', 'B365CH', 'B365CD', 'B365CA', 'BWCH', 'BWCD', 'BWCA',
        'B365C>2.5', 'B365C<2.5', 'AHCh', 'B365CAHH', 'B365CAHA', 'home_rolling_goals_scored',
        'home_rolling_goals_conceded', 'home_rolling_shots_on_target',
@@ -41,3 +42,189 @@ vars1 = ['Year', 'Month', 'DayOfWeek','HomeTeam', 'AwayTeam', 'B365H', 'B365D', 
        'away_rolling_goals_scored', 'away_rolling_goals_conceded',
        'away_rolling_shots_on_target', 'away_rolling_corners',
        'away_rolling_yellow_cards']
+
+# =============================================================================
+# TÍTULO PRINCIPAL
+# =============================================================================
+st.title('⚽ Predictor de Resultados - Premier League 2025/2026')
+st.markdown("---")
+
+# =============================================================================
+# SECCIÓN 1: CALENDARIO DE PRÓXIMOS PARTIDOS
+# =============================================================================
+st.header("📅 Próximos partidos del calendario de la English Premier League")
+
+# Creamos el DataFrame con los próximos partidos de la Jornada 31
+proximos_partidos = pd.DataFrame({
+    'Partido': ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'],
+    'Jornada': [31, 31, 31, 31, 31, 31, 31, 31],
+    'Fecha': ['2026-03-20', '2026-03-21', '2026-03-21', '2026-03-21', '2026-03-21', '2026-03-22', '2026-03-22', '2026-03-22'],
+    'Hora': ['20:00', '12:30', '15:00', '17:30', '20:00', '12:00', '14:15', '14:15'],
+    'Local (HomeTeam)': ['Bournemouth', 'Brighton', 'Fulham', 'Everton', 'Leeds', 'Newcastle', 'Aston Villa', 'Tottenham'],
+    'Visitante (AwayTeam)': ['Man United', 'Liverpool', 'Burnley', 'Chelsea', 'Brentford', 'Sunderland', 'West Ham', "Nott'm Forest"]
+})
+
+# Mostramos la tabla de partidos
+st.dataframe(
+    proximos_partidos,
+    use_container_width=True,
+    hide_index=True
+)
+
+st.markdown("---")
+
+# =============================================================================
+# SECCIÓN 2: SELECTOR DE PARTIDO
+# =============================================================================
+st.header("🎯 Selecciona un Partido para Ver Detalles")
+
+# Creamos las opciones del selector con formato descriptivo
+opciones_partidos = []
+for idx, row in proximos_partidos.iterrows():
+    opcion = f"{row['Partido']} - {row['Local (HomeTeam)']} vs {row['Visitante (AwayTeam)']} ({row['Fecha']} {row['Hora']})"
+    opciones_partidos.append(opcion)
+
+# Selector de partido
+partido_seleccionado = st.selectbox(
+    "Elige el partido que deseas analizar:",
+    options=opciones_partidos,
+    index=0
+)
+
+# Extraemos el código del partido seleccionado (P1, P2, etc.)
+codigo_partido = partido_seleccionado.split(" - ")[0]
+indice_partido = int(codigo_partido[1]) - 1  # P1 -> índice 0, P2 -> índice 1, etc.
+
+# Obtenemos los equipos del partido seleccionado
+home_team = proximos_partidos.iloc[indice_partido]['Local (HomeTeam)']
+away_team = proximos_partidos.iloc[indice_partido]['Visitante (AwayTeam)']
+
+st.markdown("---")
+
+# =============================================================================
+# SECCIÓN 3: INFORMACIÓN DEL PARTIDO SELECCIONADO
+# =============================================================================
+st.header(f"📊 Información del Partido: {home_team} vs {away_team}")
+
+# Buscamos los datos del partido en data_preparada
+datos_partido = data_preparada[
+    (data_preparada['HomeTeam'] == home_team) & 
+    (data_preparada['AwayTeam'] == away_team)
+]
+
+if not datos_partido.empty:
+    # Tomamos la primera coincidencia (el partido más reciente)
+    partido_info = datos_partido.iloc[0]
+    
+    # Mostramos información básica del partido
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader(f"🏠 Local: {home_team}")
+        st.metric("Año", int(partido_info['Year']))
+        st.metric("Mes", int(partido_info['Month']))
+        st.metric("Día de la Semana", int(partido_info['DayOfWeek']))
+    
+    with col2:
+        st.subheader(f"✈️ Visitante: {away_team}")
+    
+    st.markdown("---")
+    
+    # =============================================================================
+    # CUOTAS DE APUESTAS
+    # =============================================================================
+    st.subheader("💰 Cuotas de Apuestas")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Bet365 - Resultado**")
+        st.metric("Victoria Local (B365H)", f"{partido_info['B365H']:.2f}")
+        st.metric("Empate (B365D)", f"{partido_info['B365D']:.2f}")
+        st.metric("Victoria Visitante (B365A)", f"{partido_info['B365A']:.2f}")
+    
+    with col2:
+        st.markdown("**Betway - Resultado**")
+        st.metric("Victoria Local (BWH)", f"{partido_info['BWH']:.2f}")
+        st.metric("Empate (BWD)", f"{partido_info['BWD']:.2f}")
+        st.metric("Victoria Visitante (BWA)", f"{partido_info['BWA']:.2f}")
+    
+    with col3:
+        st.markdown("**Goles Over/Under**")
+        st.metric("Más de 2.5 goles", f"{partido_info['B365>2.5']:.2f}")
+        st.metric("Menos de 2.5 goles", f"{partido_info['B365<2.5']:.2f}")
+        st.metric("Asian Handicap (AHh)", f"{partido_info['AHh']:.2f}")
+    
+    st.markdown("---")
+    
+    # =============================================================================
+    # CUOTAS DE CIERRE
+    # =============================================================================
+    st.subheader("📈 Cuotas de Cierre")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Bet365 Cierre**")
+        st.metric("Victoria Local (B365CH)", f"{partido_info['B365CH']:.2f}")
+        st.metric("Empate (B365CD)", f"{partido_info['B365CD']:.2f}")
+        st.metric("Victoria Visitante (B365CA)", f"{partido_info['B365CA']:.2f}")
+    
+    with col2:
+        st.markdown("**Betway Cierre**")
+        st.metric("Victoria Local (BWCH)", f"{partido_info['BWCH']:.2f}")
+        st.metric("Empate (BWCD)", f"{partido_info['BWCD']:.2f}")
+        st.metric("Victoria Visitante (BWCA)", f"{partido_info['BWCA']:.2f}")
+    
+    with col3:
+        st.markdown("**Goles y Asian Handicap Cierre**")
+        st.metric("Más de 2.5 goles (C)", f"{partido_info['B365C>2.5']:.2f}")
+        st.metric("Menos de 2.5 goles (C)", f"{partido_info['B365C<2.5']:.2f}")
+        st.metric("Asian Handicap Cierre", f"{partido_info['AHCh']:.2f}")
+    
+    st.markdown("---")
+    
+    # =============================================================================
+    # ESTADÍSTICAS ROLLING - EQUIPO LOCAL
+    # =============================================================================
+    st.subheader(f"📊 Estadísticas Recientes - {home_team} (Local)")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("⚽ Goles Anotados", f"{partido_info['home_rolling_goals_scored']:.2f}")
+    with col2:
+        st.metric("🥅 Goles Recibidos", f"{partido_info['home_rolling_goals_conceded']:.2f}")
+    with col3:
+        st.metric("🎯 Tiros a Puerta", f"{partido_info['home_rolling_shots_on_target']:.2f}")
+    with col4:
+        st.metric("🚩 Córners", f"{partido_info['home_rolling_corners']:.2f}")
+    with col5:
+        st.metric("🟨 Tarjetas Amarillas", f"{partido_info['home_rolling_yellow_cards']:.2f}")
+    
+    st.markdown("---")
+    
+    # =============================================================================
+    # ESTADÍSTICAS ROLLING - EQUIPO VISITANTE
+    # =============================================================================
+    st.subheader(f"📊 Estadísticas Recientes - {away_team} (Visitante)")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.metric("⚽ Goles Anotados", f"{partido_info['away_rolling_goals_scored']:.2f}")
+    with col2:
+        st.metric("🥅 Goles Recibidos", f"{partido_info['away_rolling_goals_conceded']:.2f}")
+    with col3:
+        st.metric("🎯 Tiros a Puerta", f"{partido_info['away_rolling_shots_on_target']:.2f}")
+    with col4:
+        st.metric("🚩 Córners", f"{partido_info['away_rolling_corners']:.2f}")
+    with col5:
+        st.metric("🟨 Tarjetas Amarillas", f"{partido_info['away_rolling_yellow_cards']:.2f}")
+
+else:
+    st.warning(f"⚠️ No se encontraron datos para el partido {home_team} vs {away_team} en el dataset.")
+    st.info("Los datos del partido podrían no estar disponibles en data_preparada.csv")
+
+st.markdown("---")
+st.caption("📌 Datos de la temporada 2020-2021 hasta 2025-2026 (Jornada 31) | Total: 1,821 partidos")
