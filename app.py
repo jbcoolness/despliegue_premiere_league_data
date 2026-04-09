@@ -12,12 +12,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Cargamos el modelo 1
-with open('modelTree_v1.pkl', 'rb') as f:
+# Cargamos el modelo 1 (Regresión Logística)
+with open('modelLR_v1.pkl', 'rb') as f:
     bundle = pickle.load(f)
 
 model_1 = bundle['modelo']
-min_max_scaler_1 = bundle['scaler']
 variables_1 = bundle['features']
 objetivo_1 = bundle['target_encoder']
 min_max_scaler_1 = bundle['scaler']
