@@ -7,7 +7,7 @@ import streamlit as st
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Predictor Premier League",
+    page_title="Match Predictor Premier League",
     page_icon="⚽",
     layout="wide"
 )
@@ -17,8 +17,10 @@ with open('modelTree_v1.pkl', 'rb') as f:
     bundle = pickle.load(f)
 
 model_1 = bundle['modelo']
+min_max_scaler_1 = bundle['scaler']
 variables_1 = bundle['features']
 objetivo_1 = bundle['target_encoder']
+min_max_scaler_1 = bundle['scaler']
 
 # Cargamos el modelo 2
 with open('modelTree_2_v1.pkl', 'rb') as f:
@@ -37,6 +39,16 @@ data_preparada = pd.read_csv('data_preparada.csv')
 vars1 = ['HomeTeam', 'AwayTeam','Year', 'Month', 'DayOfWeek', 'B365H', 'B365D', 'B365A', 'BWH', 'BWD', 'BWA', 'B365>2.5', 'B365<2.5',
        'AHh', 'B365CH', 'B365CD', 'B365CA', 'BWCH', 'BWCD', 'BWCA',
        'B365C>2.5', 'B365C<2.5', 'AHCh', 'B365CAHH', 'B365CAHA', 'home_rolling_goals_scored',
+       'home_rolling_goals_conceded', 'home_rolling_shots_on_target',
+       'home_rolling_corners', 'home_rolling_yellow_cards',
+       'away_rolling_goals_scored', 'away_rolling_goals_conceded',
+       'away_rolling_shots_on_target', 'away_rolling_corners',
+       'away_rolling_yellow_cards']
+
+scaler_vars = ['B365H', 'B365D', 'B365A', 'BWH', 'BWD', 'BWA', 'B365>2.5', 'B365<2.5',
+       'AHh', 'B365CH', 'B365CD', 'B365CA', 'BWCH', 'BWCD', 'BWCA',
+       'B365C>2.5', 'B365C<2.5', 'AHCh', 'B365CAHH', 'B365CAHA', 'Year',
+       'Month', 'DayOfWeek', 'home_rolling_goals_scored',
        'home_rolling_goals_conceded', 'home_rolling_shots_on_target',
        'home_rolling_corners', 'home_rolling_yellow_cards',
        'away_rolling_goals_scored', 'away_rolling_goals_conceded',
@@ -76,7 +88,7 @@ st.markdown("---")
 # =============================================================================
 # SECCIÓN 2: SELECTOR DE PARTIDO
 # =============================================================================
-st.header("🎯 Selecciona un Partido para Ver Detalles")
+st.header("🎯 Selecciona un Partido para Ver sus variables")
 
 # Creamos las opciones del selector con formato descriptivo
 opciones_partidos = []
@@ -187,7 +199,7 @@ if not datos_partido.empty:
     # =============================================================================
     # ESTADÍSTICAS ROLLING - EQUIPO LOCAL
     # =============================================================================
-    st.subheader(f"📊 Estadísticas Recientes - {home_team} (Local)")
+    st.subheader(f"📊 Estadísticas Recientes - {home_team} (Local) - Estos datos son un promedio de los últimos 8 partidos de local")
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -207,7 +219,7 @@ if not datos_partido.empty:
     # =============================================================================
     # ESTADÍSTICAS ROLLING - EQUIPO VISITANTE
     # =============================================================================
-    st.subheader(f"📊 Estadísticas Recientes - {away_team} (Visitante)")
+    st.subheader(f"📊 Estadísticas Recientes - {away_team} (Visitante) - Estos datos son un promedio de los últimos 8 partidos de visitante")
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -222,9 +234,100 @@ if not datos_partido.empty:
     with col5:
         st.metric("🟨 Tarjetas Amarillas", f"{partido_info['away_rolling_yellow_cards']:.2f}")
 
+    st.markdown("---")
+    
+    # =============================================================================
+    # SECCIÓN: PREDICCIÓN DEL MODELO
+    # =============================================================================
+    st.header("🔮 Predicción del Resultado")
+    
+    # Preparación de datos para predicción
+    # 1. Crear copia de los datos del partido seleccionado
+    datos_prediccion = datos_partido.copy()
+    
+    # 2. Convertir variables categóricas (HomeTeam, AwayTeam) a variables dummy
+    datos_prediccion = pd.get_dummies(
+        datos_prediccion, 
+        columns=['HomeTeam', 'AwayTeam'], 
+        drop_first=False, 
+        dtype=int
+    )
+    
+    # 3. Adicionar columnas faltantes que el modelo espera (equipos no presentes)
+    datos_prediccion = datos_prediccion.reindex(columns=variables_1, fill_value=0)
+    
+    # 4. Normalizar variables numéricas con el scaler entrenado
+    datos_prediccion[scaler_vars] = min_max_scaler_1.transform(datos_prediccion[scaler_vars])
+    
+    # 5. Realizar la predicción con el modelo
+    Y_pred_encoded = model_1.predict(datos_prediccion)
+    
+    # 6. Decodificar la predicción según el criterio de entrenamiento
+    # Mapeo: A=0 (Victoria Visitante), D=1 (Empate), H=2 (Victoria Local)
+    mapeo_prediccion = {0: 'A', 1: 'D', 2: 'H'}
+    Y_pred_label = mapeo_prediccion.get(Y_pred_encoded[0], 'Desconocido')
+    
+    # 7. Interpretar el resultado
+    resultados_dict = {
+        'H': {'texto': 'Victoria Local', 'emoji': '🏠', 'color': 'green', 'equipo': home_team},
+        'D': {'texto': 'Empate', 'emoji': '🤝', 'color': 'orange', 'equipo': 'Ambos equipos'},
+        'A': {'texto': 'Victoria Visitante', 'emoji': '✈️', 'color': 'blue', 'equipo': away_team}
+    }
+    
+    resultado = resultados_dict.get(Y_pred_label, {'texto': 'Desconocido', 'emoji': '❓', 'color': 'gray', 'equipo': 'N/A'})
+    
+    # 8. Mostrar el resultado de forma visual
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        ">
+            <h1 style="color: white; font-size: 3em; margin: 0;">{resultado['emoji']}</h1>
+            <h2 style="color: white; margin: 10px 0;">{resultado['texto']}</h2>
+            <p style="color: #ddd; font-size: 1.2em; margin: 5px 0;">
+                <strong>{home_team}</strong> vs <strong>{away_team}</strong>
+            </p>
+            <p style="color: #aaa; font-size: 0.9em;">
+                Predicción: <strong style="color: #ffd700;">{Y_pred_label}</strong> 
+                (H=Local, D=Empate, A=Visitante)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Mostrar información adicional sobre la predicción
+    st.markdown("")
+    with st.expander("📋 Ver detalles técnicos de la predicción"):
+        st.markdown("**Proceso de predicción:**")
+        st.markdown("""
+        1. ✅ Datos del partido extraídos de `data_preparada.csv`
+        2. ✅ Variables categóricas convertidas a dummy (One-Hot Encoding)
+        3. ✅ Columnas faltantes añadidas con valor 0
+        4. ✅ Variables numéricas normalizadas con MinMaxScaler
+        5. ✅ Predicción realizada con el modelo entrenado
+        """)
+        
+        st.markdown("**Criterio de decodificación:**")
+        st.markdown("""
+        | Código | Etiqueta | Significado |
+        |--------|----------|-------------|
+        | 0 | A | Victoria Visitante (Away) |
+        | 1 | D | Empate (Draw) |
+        | 2 | H | Victoria Local (Home) |
+        """)
+        
+        st.markdown(f"**Resultado codificado:** `{Y_pred_encoded[0]}`")
+        st.markdown(f"**Resultado decodificado:** `{Y_pred_label}`")
+        st.markdown(f"**Interpretación:** {resultado['texto']}")
+
 else:
     st.warning(f"⚠️ No se encontraron datos para el partido {home_team} vs {away_team} en el dataset.")
-    st.info("Los datos del partido podrían no estar disponibles en data_preparada.csv")
+    st.info("Los datos del partido podrían no estar disponibles en nuestro servidor")
 
 st.markdown("---")
-st.caption("📌 Datos de la temporada 2020-2021 hasta 2025-2026 (Jornada 31) | Total: 1,821 partidos")
+st.caption("📌 Datos de la temporada 2020-2021 hasta 2025-2026 (Jornada 30) | Total: 1,820 partidos")
