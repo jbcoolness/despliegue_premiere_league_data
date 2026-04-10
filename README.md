@@ -9,7 +9,7 @@
 
 **Sistema de predicción de resultados de partidos de fútbol de la English Premier League utilizando técnicas de Machine Learning**
 
-[🚀 Ver Aplicación en Vivo](https://despliegue-premiere-league-data.streamlit.app/) | [📊 Fuente de Datos](https://www.football-data.co.uk/englandm.php)
+[🚀 Ver Aplicación en Vivo](https://premiereleague-matchpredictor.streamlit.app/) | [📊 Fuente de Datos](https://www.football-data.co.uk/englandm.php)
 
 </div>
 
