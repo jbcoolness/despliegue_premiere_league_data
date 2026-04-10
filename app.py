@@ -258,15 +258,28 @@ if not datos_partido.empty:
     # 4. Normalizar variables numéricas con el scaler entrenado
     datos_prediccion[scaler_vars] = min_max_scaler_1.transform(datos_prediccion[scaler_vars])
     
-    # 5. Realizar la predicción con el modelo
+    # 5. Realizar la predicción con el modelo 1 (Resultado del partido)
     Y_pred_encoded = model_1.predict(datos_prediccion)
     
-    # 6. Decodificar la predicción según el criterio de entrenamiento
+    # 6. Preparar datos para el modelo 2 (Gol del visitante)
+    datos_prediccion_2 = datos_partido.copy()
+    datos_prediccion_2 = pd.get_dummies(
+        datos_prediccion_2, 
+        columns=['HomeTeam', 'AwayTeam'], 
+        drop_first=False, 
+        dtype=int
+    )
+    datos_prediccion_2 = datos_prediccion_2.reindex(columns=variables_2, fill_value=0)
+    
+    # 7. Realizar la predicción con el modelo 2 (¿El visitante marca?)
+    Y_pred_encoded_2 = model_2.predict(datos_prediccion_2)
+    
+    # 8. Decodificar la predicción del modelo 1
     # Mapeo: A=0 (Victoria Visitante), D=1 (Empate), H=2 (Victoria Local)
     mapeo_prediccion = {0: 'A', 1: 'D', 2: 'H'}
     Y_pred_label = mapeo_prediccion.get(Y_pred_encoded[0], 'Desconocido')
     
-    # 7. Interpretar el resultado
+    # 9. Interpretar el resultado del modelo 1
     resultados_dict = {
         'H': {'texto': 'Victoria Local', 'emoji': '🏠', 'color': 'green', 'equipo': home_team},
         'D': {'texto': 'Empate', 'emoji': '🤝', 'color': 'orange', 'equipo': 'Ambos equipos'},
@@ -275,7 +288,20 @@ if not datos_partido.empty:
     
     resultado = resultados_dict.get(Y_pred_label, {'texto': 'Desconocido', 'emoji': '❓', 'color': 'gray', 'equipo': 'N/A'})
     
-    # 8. Mostrar el resultado de forma visual
+    # 10. Interpretar el resultado del modelo 2 (0 = No marca, 1 = Sí marca)
+    gol_visitante = int(Y_pred_encoded_2[0])
+    resultado_gol = {
+        0: {'texto': 'No marcará gol', 'emoji': '🚫', 'color': '#dc3545'},
+        1: {'texto': 'Marcará al menos 1 gol', 'emoji': '⚽', 'color': '#28a745'}
+    }
+    resultado_visitante = resultado_gol.get(gol_visitante, {'texto': 'Desconocido', 'emoji': '❓', 'color': 'gray'})
+    
+    # =============================================================================
+    # VISUALIZACIÓN DE PREDICCIONES
+    # =============================================================================
+    
+    # Predicción 1: Resultado del partido
+    st.subheader("🎯 Predicción 1: Resultado del Partido")
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
@@ -299,30 +325,83 @@ if not datos_partido.empty:
         </div>
         """, unsafe_allow_html=True)
     
-    # Mostrar información adicional sobre la predicción
     st.markdown("")
-    with st.expander("📋 Ver detalles técnicos de la predicción"):
+    
+    # Predicción 2: Gol del visitante
+    st.subheader(f"🎯 Predicción 2: ¿{away_team} marcará gol?")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, {resultado_visitante['color']} 0%, {'#1a5f2a' if gol_visitante == 1 else '#8b1a2b'} 100%);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        ">
+            <h1 style="color: white; font-size: 3em; margin: 0;">{resultado_visitante['emoji']}</h1>
+            <h2 style="color: white; margin: 10px 0;">{resultado_visitante['texto']}</h2>
+            <p style="color: #ddd; font-size: 1.2em; margin: 5px 0;">
+                Equipo Visitante: <strong>{away_team}</strong>
+            </p>
+            <p style="color: #aaa; font-size: 0.9em;">
+                Predicción: <strong style="color: #ffd700;">{gol_visitante}</strong> 
+                (0=No marca, 1=Sí marca)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("")
+    
+    # Mostrar información adicional sobre las predicciones
+    with st.expander("📋 Ver detalles técnicos de las predicciones"):
         st.markdown("**Proceso de predicción:**")
         st.markdown("""
         1. ✅ Datos del partido extraídos de `data_preparada.csv`
         2. ✅ Variables categóricas convertidas a dummy (One-Hot Encoding)
         3. ✅ Columnas faltantes añadidas con valor 0
-        4. ✅ Variables numéricas normalizadas con MinMaxScaler
-        5. ✅ Predicción realizada con el modelo entrenado
+        4. ✅ Variables numéricas normalizadas con MinMaxScaler (Modelo 1)
+        5. ✅ Predicciones realizadas con ambos modelos entrenados
         """)
         
-        st.markdown("**Criterio de decodificación:**")
-        st.markdown("""
-        | Código | Etiqueta | Significado |
-        |--------|----------|-------------|
-        | 0 | A | Victoria Visitante (Away) |
-        | 1 | D | Empate (Draw) |
-        | 2 | H | Victoria Local (Home) |
-        """)
+        st.markdown("---")
         
-        st.markdown(f"**Resultado codificado:** `{Y_pred_encoded[0]}`")
-        st.markdown(f"**Resultado decodificado:** `{Y_pred_label}`")
-        st.markdown(f"**Interpretación:** {resultado['texto']}")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Modelo 1 - Resultado del Partido:**")
+            st.markdown("""
+            | Código | Etiqueta | Significado |
+            |--------|----------|-------------|
+            | 0 | A | Victoria Visitante |
+            | 1 | D | Empate |
+            | 2 | H | Victoria Local |
+            """)
+            st.markdown(f"**Resultado:** `{Y_pred_encoded[0]}` → `{Y_pred_label}` → {resultado['texto']}")
+        
+        with col2:
+            st.markdown("**Modelo 2 - Gol del Visitante:**")
+            st.markdown("""
+            | Código | Significado |
+            |--------|-------------|
+            | 0 | No marca gol |
+            | 1 | Marca al menos 1 gol |
+            """)
+            st.markdown(f"**Resultado:** `{gol_visitante}` → {resultado_visitante['texto']}")
+    
+    # =============================================================================
+    # WARNING SOBRE CAPACIDAD DE PREDICCIÓN
+    # =============================================================================
+    st.markdown("")
+    st.warning("""
+    ⚠️ **Aviso sobre la capacidad de predicción de los modelos:**
+    
+    Estos modelos tienen una **capacidad moderada de predicción**. Sus resultados son mejores que una predicción aleatoria, 
+    pero deben interpretarse con **cautela**, ya que el fútbol es un fenómeno con **alta incertidumbre**.
+    
+    Los resultados mostrados son estimaciones basadas en datos históricos y cuotas de apuestas, no garantías de resultados reales.
+    """)
 
 else:
     st.warning(f"⚠️ No se encontraron datos para el partido {home_team} vs {away_team} en el dataset.")
